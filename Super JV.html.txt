@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Roland JV-1080 Emulator</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --faceplate-color: #222;
+            --text-color: #ddd;
+            --orange-lcd: #ff8c00;
+            --lcd-bg: #2a1a05;
+            --led-red: #ff3333;
+            --led-off: #441111;
+            --button-grey: #444;
+            --rack-ear: #111;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: var(--text-color);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* --- RACK UNIT DESIGN --- */
+        .rack-unit {
+            width: 100%;
+            max-width: 900px;
+            background: linear-gradient(to bottom, #333 0%, #222 10%, #1a1a1a 100%);
+            border-top: 2px solid #555;
+            border-bottom: 2px solid #000;
+            display: grid;
+            grid-template-columns: 80px 1fr 80px;
+            gap: 10px;
+            padding: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            position: relative;
+        }
+
+        /* Rack Ears */
+        .rack-ear {
+            background: var(--rack-ear);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px 0;
+            align-items: center;
+        }
+        .screw {
+            width: 15px;
+            height: 15px;
+            background: radial-gradient(circle, #888 0%, #333 100%);
+            border-radius: 50%;
+            border: 1px solid #111;
+        }
+
+        /* Main Faceplate */
+        .faceplate {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Top Row: Logo, LCD, Mode Buttons */
+        .top-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            height: 90px;
+        }
+
+        .logo-section {
+            display: flex;
+            flex-direction: column;
+            width: 120px;
+        }
+        .brand {
+            font-weight: 900;
+            font-size: 1.4rem;
+            letter-spacing: 1px;
+            color: #ccc;
+            text-shadow: 0 1px 2px #000;
+        }
+        .model {
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #d88c42; /* Rolandish gold/orange */
+            font-style: italic;
+        }
+        .model span { color: #aaa; font-style: normal; }
+
+        /* LCD Screen */
+        .lcd-bezel {
+            flex: 1;
+            background: #111;
+            padding: 5px;
+            border-radius: 4px;
+            border: 2px solid #444;
+            box-shadow: inset 0 0 10px #000;
+            position: relative;
+        }
+        .lcd-screen {
+            background-color: var(--lcd-bg);
+            color: var(--orange-lcd);
+            font-family: 'Courier New', Courier, monospace;
+            padding: 8px 12px;
+            height: 100%;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            text-shadow: 0 0 4px rgba(255, 140, 0, 0.6);
+            letter-spacing: 1px;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+        .lcd-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Controls Area */
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            gap: 4px;
+        }
+        .btn-group-vertical {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .jv-btn {
+            background: linear-gradient(to bottom, #444, #333);
+            border: 1px solid #111;
+            color: #aaa;
+            font-size: 0.6rem;
+            padding: 8px 10px;
+            min-width: 45px;
+            text-align: center;
+            border-radius: 2px;
+            cursor: pointer;
+            box-shadow: 0 2px 2px rgba(0,0,0,0.5);
+            position: relative;
+            transition: all 0.1s;
+        }
+        .jv-btn:active {
+            transform: translateY(1px);
+            background: #222;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
+        }
+        .jv-btn.active {
+            background: #333;
+        }
+        .jv-btn .led {
+            width: 8px;
+            height: 4px;
+            background: var(--led-off);
+            margin: 0 auto 4px auto;
+            border-radius: 1px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .jv-btn.active .led {
+            background: var(--led-red);
+            box-shadow: 0 0 5px var(--led-red);
+        }
+
+        /* Data Wheel */
+        .data-wheel-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .data-wheel {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: conic-gradient(#333, #111, #333, #111, #333);
+            border: 2px solid #000;
+            box-shadow: 0 4px 5px rgba(0,0,0,0.6);
+            position: relative;
+            cursor: ns-resize;
+        }
+        .data-wheel::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            background: #888;
+            border-radius: 50%;
+        }
+        .label {
+            font-size: 0.6rem;
+            color: #999;
+            margin-top: 4px;
+            text-transform: uppercase;
+        }
+
+        /* Volume Knob */
+        .vol-knob {
+            width: 30px;
+            height: 30px;
+            background: #222;
+            border-radius: 50%;
+            border: 1px solid #000;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .vol-knob::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 50%;
+            width: 2px;
+            height: 12px;
+            background: #fff;
+            transform-origin: bottom center;
+            transform: translateX(-50%) rotate(0deg); /* Volume indicator */
+        }
+
+        /* Tone Switch Section */
+        .tone-switch-section {
+            border: 1px solid #444;
+            padding: 4px;
+            border-radius: 4px;
+            background: #151515;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .section-label {
+            font-size: 0.6rem;
+            color: #d88c42;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        /* KEYBOARD */
+        .keyboard-container {
+            width: 100%;
+            max-width: 900px;
+            height: 120px;
+            margin-top: 20px;
+            position: relative;
+            background: #111;
+            padding: 5px;
+            border-radius: 0 0 5px 5px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .keys {
+            display: flex;
+            height: 100%;
+            position: relative;
+        }
+        .key {
+            flex: 1;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 0 0 4px 4px;
+            cursor: pointer;
+            z-index: 1;
+            position: relative;
+        }
+        .key:active, .key.pressed {
+            background: #eee;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+            transform-origin: top;
+            transform: perspective(400px) rotateX(-2deg);
+        }
+        .key.black {
+            background: #000;
+            color: white;
+            height: 60%;
+            width: 6%; /* Relative width */
+            position: absolute;
+            z-index: 2;
+            border: 1px solid #333;
+            border-radius: 0 0 3px 3px;
+        }
+        .key.black:active, .key.black.pressed {
+            background: #222;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            .rack-unit { 
+                grid-template-columns: 1fr; 
+                padding: 5px;
+            }
+            .rack-ear { display: none; }
+            .top-row { gap: 10px; height: auto; flex-wrap: wrap; justify-content: space-between;}
+            .logo-section { width: auto; flex-direction: row; gap: 10px; align-items: baseline; }
+            .controls-row { flex-wrap: wrap; justify-content: center; }
+            .keyboard-container { height: 100px; }
+            .btn-group { flex-wrap: wrap; justify-content: center;}
+            .lcd-screen { font-size: 12px; }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 1;
+            transition: opacity 0.5s;
+        }
+        .modal-content {
+            background: #222;
+            padding: 30px;
+            border: 2px solid #d88c42;
+            color: #d88c42;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 0 20px rgba(255, 140, 0, 0.4);
+            max-width: 300px;
+        }
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="modal-overlay" id="startModal">
+        <div class="modal-content">
+            <h2>ROLAND JV-1080</h2>
+            <p>Initializing System...</p>
+            <p style="font-size: 0.8rem; color: #aaa;">Click to Power On</p>
+        </div>
+    </div>
+
+    <div class="rack-unit">
+        <!-- Left Rack Ear -->
+        <div class="rack-ear">
+            <div class="screw"></div>
+            <div class="screw"></div>
+        </div>
+
+        <!-- Faceplate -->
+        <div class="faceplate">
+            
+            <!-- Top Row: LCD and Logo -->
+            <div class="top-row">
+                <div class="logo-section">
+                    <div class="brand">Roland</div>
+                    <div class="model">JV-1080 <span>Super JV</span></div>
+                </div>
+
+                <div class="lcd-bezel">
+                    <div class="lcd-screen" id="lcd">
+                        <div id="lcd-line-1">USER: 001 [Fantasia JV]</div>
+                        <div id="lcd-line-2">P:1 T:1234 Ef:Cho+Rev</div>
+                        <div class="lcd-overlay"></div>
+                    </div>
+                </div>
+                
+                 <div class="data-wheel-container">
+                    <div class="data-wheel" id="dataWheel"></div>
+                    <div class="label">Value</div>
+                </div>
+            </div>
+
+            <!-- Controls Row -->
+            <div class="controls-row">
+                
+                <div class="data-wheel-container">
+                    <div class="vol-knob"></div>
+                    <div class="label">Volume</div>
+                </div>
+
+                <div class="btn-group">
+                     <button class="jv-btn active" id="modePatch"><div class="led"></div>PATCH</button>
+                     <button class="jv-btn"><div class="led"></div>PERFORM</button>
+                     <button class="jv-btn"><div class="led"></div>RHYTHM</button>
+                </div>
+
+                <div class="tone-switch-section">
+                    <div class="section-label">TONE SWITCH</div>
+                    <div class="btn-group">
+                        <button class="jv-btn active" id="tone1"><div class="led"></div>1</button>
+                        <button class="jv-btn active" id="tone2"><div class="led"></div>2</button>
+                        <button class="jv-btn active" id="tone3"><div class="led"></div>3</button>
+                        <button class="jv-btn active" id="tone4"><div class="led"></div>4</button>
+                    </div>
+                </div>
+
+                 <div class="btn-group">
+                     <button class="jv-btn" id="btnDec">DEC</button>
+                     <button class="jv-btn" id="btnInc">INC</button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Right Rack Ear -->
+        <div class="rack-ear">
+            <div class="screw"></div>
+            <div class="screw"></div>
+        </div>
+    </div>
+
+    <!-- Musical Keyboard -->
+    <div class="keyboard-container" id="keyboard">
+        <!-- Generated via JS -->
+    </div>
+
+    <script>
+        /**
+         * JV-1080 AUDIO ENGINE
+         * Recreating the structure: Patch -> 4 Tones -> TVF -> TVA -> Effects
+         */
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let ctx;
+        let masterGain;
+        let compressor;
+        let chorusNode;
+        let reverbNode;
+
+        // --- PRESETS ---
+        // Simulating the ROM data. 
+        // Architecture: 4 Tones per patch. Each tone has waveform, filter, envelope, LFO.
+        const PRESETS = [
+            {
+                name: "Fantasia JV",
+                category: "Pad/Bell",
+                tones: [
+                    // Tone 1: Bell Attack (FM-ish)
+                    { active: true, wave: 'sine', detune: 0, 
+                      filter: { type: 'lowpass', cutoff: 8000, res: 0 },
+                      env: { a: 0.01, d: 0.5, s: 0, r: 0.5 }, 
+                      vol: 0.8 },
+                    // Tone 2: Warm Pad Body
+                    { active: true, wave: 'sawtooth', detune: -5, 
+                      filter: { type: 'lowpass', cutoff: 1200, res: 2 },
+                      env: { a: 0.8, d: 0.5, s: 0.8, r: 2.0 }, 
+                      vol: 0.4 },
+                    // Tone 3: High Sparkle (Triangle)
+                    { active: true, wave: 'triangle', detune: 1200, // +1 Octave
+                      filter: { type: 'highpass', cutoff: 3000, res: 0 },
+                      env: { a: 0.05, d: 0.2, s: 0, r: 0.4 }, 
+                      vol: 0.3 },
+                    // Tone 4: Sub Body
+                    { active: true, wave: 'sine', detune: 5, 
+                      filter: { type: 'lowpass', cutoff: 2000, res: 0 },
+                      env: { a: 1.5, d: 1.0, s: 0.6, r: 2.5 }, 
+                      vol: 0.4 }
+                ],
+                effects: { chorus: 0.6, reverb: 0.5 }
+            },
+            {
+                name: "Terminator",
+                category: "Lead",
+                tones: [
+                    { active: true, wave: 'sawtooth', detune: -10, 
+                      filter: { type: 'lowpass', cutoff: 4000, res: 10 },
+                      env: { a: 0.01, d: 0.2, s: 0.8, r: 0.2 }, 
+                      vol: 0.6 },
+                    { active: true, wave: 'square', detune: 10, 
+                      filter: { type: 'lowpass', cutoff: 3500, res: 5 },
+                      env: { a: 0.01, d: 0.2, s: 0.8, r: 0.2 }, 
+                      vol: 0.6 },
+                    { active: true, wave: 'sawtooth', detune: -1205, // -1 Octave
+                      filter: { type: 'lowpass', cutoff: 2000, res: 2 },
+                      env: { a: 0.01, d: 0.1, s: 1.0, r: 0.1 }, 
+                      vol: 0.8 },
+                    { active: false, wave: 'noise', detune: 0, vol: 0 }
+                ],
+                effects: { chorus: 0.2, reverb: 0.1 }
+            },
+            {
+                name: "Soundtrack",
+                category: "Classic Pad",
+                tones: [
+                    // Stacked 5ths
+                    { active: true, wave: 'sawtooth', detune: 0, 
+                      filter: { type: 'lowpass', cutoff: 800, res: 4 },
+                      env: { a: 1.0, d: 2.0, s: 0.7, r: 2.5 }, 
+                      vol: 0.5 },
+                    { active: true, wave: 'sawtooth', detune: 700, // +7 Semitones
+                      filter: { type: 'lowpass', cutoff: 800, res: 4 },
+                      env: { a: 1.2, d: 2.0, s: 0.7, r: 2.5 }, 
+                      vol: 0.35 },
+                    { active: true, wave: 'sawtooth', detune: -5, 
+                      filter: { type: 'lowpass', cutoff: 1000, res: 0 },
+                      env: { a: 0.5, d: 1.0, s: 0.5, r: 2.0 }, 
+                      vol: 0.4 },
+                    { active: true, wave: 'triangle', detune: 1205, 
+                      filter: { type: 'lowpass', cutoff: 2000, res: 0 },
+                      env: { a: 1.5, d: 2.0, s: 0.2, r: 3.0 }, 
+                      vol: 0.2 }
+                ],
+                effects: { chorus: 0.8, reverb: 0.8 }
+            },
+            {
+                name: "Bass Marimba",
+                category: "Percussion",
+                tones: [
+                    { active: true, wave: 'sine', detune: 0, 
+                      filter: { type: 'lowpass', cutoff: 600, res: 0 },
+                      env: { a: 0.005, d: 0.3, s: 0, r: 0.1 }, 
+                      vol: 1.0 },
+                    { active: true, wave: 'square', detune: 1200, 
+                      filter: { type: 'lowpass', cutoff: 800, res: 0 },
+                      env: { a: 0.001, d: 0.05, s: 0, r: 0.05 }, 
+                      vol: 0.3 }, // Click
+                    { active: true, wave: 'sine', detune: -1200, 
+                      filter: { type: 'lowpass', cutoff: 300, res: 0 },
+                      env: { a: 0.01, d: 0.5, s: 0, r: 0.2 }, 
+                      vol: 0.8 },
+                    { active: false, wave: 'sawtooth', detune: 0, vol: 0 }
+                ],
+                effects: { chorus: 0.0, reverb: 0.2 }
+            },
+             {
+                name: "Pizzagogo",
+                category: "Pluck",
+                tones: [
+                    { active: true, wave: 'triangle', detune: 0, 
+                      filter: { type: 'lowpass', cutoff: 2000, res: 1 },
+                      env: { a: 0.01, d: 0.2, s: 0.1, r: 0.1 }, 
+                      vol: 0.8 },
+                    { active: true, wave: 'sine', detune: 700, 
+                      filter: { type: 'lowpass', cutoff: 3000, res: 0 },
+                      env: { a: 0.01, d: 0.1, s: 0, r: 0.1 }, 
+                      vol: 0.3 },
+                    { active: true, wave: 'sawtooth', detune: 0, 
+                      filter: { type: 'lowpass', cutoff: 800, res: 8 }, // Plucky filter
+                      env: { a: 0.001, d: 0.15, s: 0, r: 0.1 }, 
+                      filterEnvMod: true,
+                      vol: 0.5 },
+                    { active: false, wave: 'noise', vol: 0 }
+                ],
+                effects: { chorus: 0.3, reverb: 0.3 }
+            }
+        ];
+
+        // --- STATE ---
+        let currentPatchIndex = 0;
+        let toneActive = [true, true, true, true]; // User overrides for tones
+        
+        // --- AUDIO ENGINE ---
+
+        function initAudio() {
+            if (ctx) return;
+            ctx = new AudioContext();
+            
+            // Master Chain
+            masterGain = ctx.createGain();
+            masterGain.gain.value = 0.5;
+            
+            compressor = ctx.createDynamicsCompressor();
+            compressor.threshold.value = -10;
+            compressor.ratio.value = 4;
+
+            // Effects Bus
+            setupEffects();
+
+            // Connect Master
+            compressor.connect(ctx.destination);
+            masterGain.connect(compressor);
+            
+            // Update UI
+            document.getElementById('startModal').classList.add('hidden');
+            updateLCD();
+        }
+
+        function setupEffects() {
+            // Reverb (Simple Impulse)
+            reverbNode = ctx.createConvolver();
+            // Generate noise impulse
+            const rate = ctx.sampleRate;
+            const length = rate * 2.0; // 2 seconds
+            const impulse = ctx.createBuffer(2, length, rate);
+            const left = impulse.getChannelData(0);
+            const right = impulse.getChannelData(1);
+            for (let i = 0; i < length; i++) {
+                const decay = Math.pow(1 - i / length, 2);
+                left[i] = (Math.random() * 2 - 1) * decay;
+                right[i] = (Math.random() * 2 - 1) * decay;
+            }
+            reverbNode.buffer = impulse;
+            
+            // Reverb Mix Gain
+            const reverbGain = ctx.createGain();
+            reverbGain.gain.value = 0.3; // Default
+            reverbNode.connect(reverbGain);
+            reverbGain.connect(masterGain);
+            reverbNode.input = reverbNode;
+            
+            // Chorus (Delay modulation)
+            // Simplified: Just 2 delays modulating
+            const chorusGain = ctx.createGain();
+            chorusGain.gain.value = 0.0; // Controlled by patch
+            
+            const delayL = ctx.createDelay();
+            const delayR = ctx.createDelay();
+            delayL.delayTime.value = 0.02;
+            delayR.delayTime.value = 0.025;
+            
+            const lfo = ctx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.5;
+            const lfoGain = ctx.createGain();
+            lfoGain.gain.value = 0.002;
+            
+            lfo.connect(lfoGain);
+            lfoGain.connect(delayL.delayTime);
+            lfoGain.connect(delayR.delayTime);
+            lfo.start();
+
+            chorusGain.connect(delayL);
+            chorusGain.connect(delayR);
+            delayL.connect(masterGain);
+            delayR.connect(masterGain);
+            
+            // Expose for patch loading
+            masterGain.reverb = reverbGain;
+            masterGain.chorus = chorusGain;
+            masterGain.reverbInput = reverbNode;
+            masterGain.chorusInput = chorusGain;
+        }
+
+        class JVVoice {
+            constructor(noteFreq, patch) {
+                this.ctx = ctx;
+                this.nodes = [];
+                
+                // Set Effect Levels
+                masterGain.reverb.gain.setTargetAtTime(patch.effects.reverb, ctx.currentTime, 0.1);
+                masterGain.chorus.gain.setTargetAtTime(patch.effects.chorus, ctx.currentTime, 0.1);
+
+                patch.tones.forEach((toneData, index) => {
+                    // Check Hardware Tone Switch AND Patch Tone Active
+                    if (!toneActive[index] || !toneData.active) return;
+
+                    // 1. Oscillator
+                    const osc = ctx.createOscillator();
+                    osc.type = toneData.wave;
+                    osc.frequency.setValueAtTime(noteFreq, ctx.currentTime);
+                    osc.detune.value = toneData.detune;
+
+                    // 2. Filter (TVF)
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = toneData.filter.type;
+                    filter.frequency.value = toneData.filter.cutoff;
+                    filter.Q.value = toneData.filter.res;
+
+                    if (toneData.filterEnvMod) {
+                         const now = ctx.currentTime;
+                         filter.frequency.setValueAtTime(toneData.filter.cutoff, now);
+                         filter.frequency.exponentialRampToValueAtTime(toneData.filter.cutoff * 2, now + toneData.env.a);
+                         filter.frequency.exponentialRampToValueAtTime(toneData.filter.cutoff, now + toneData.env.a + toneData.env.d);
+                    }
+
+                    // 3. Amplifier (TVA)
+                    const gain = ctx.createGain();
+                    gain.gain.value = 0;
+
+                    // Routing
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(masterGain);
+                    gain.connect(masterGain.reverbInput);
+                    gain.connect(masterGain.chorusInput);
+
+                    // Envelopes
+                    const now = ctx.currentTime;
+                    const { a, d, s, r } = toneData.env;
+                    
+                    // Attack
+                    gain.gain.linearRampToValueAtTime(toneData.vol, now + a);
+                    // Decay to Sustain
+                    gain.gain.linearRampToValueAtTime(toneData.vol * s, now + a + d);
+
+                    osc.start(now);
+
+                    this.nodes.push({ osc, gain, filter, env: toneData.env });
+                });
+            }
+
+            stop() {
+                const now = ctx.currentTime;
+                this.nodes.forEach(node => {
+                    // Release Phase
+                    node.gain.gain.cancelScheduledValues(now);
+                    node.gain.gain.setValueAtTime(node.gain.gain.value, now);
+                    node.gain.gain.exponentialRampToValueAtTime(0.001, now + node.env.r);
+                    node.osc.stop(now + node.env.r);
+                });
+            }
+        }
+
+        // --- KEYBOARD & INPUT ---
+        const activeVoices = {}; // Map key code to voice
+
+        function playNote(freq, keyId) {
+            if (!ctx) initAudio();
+            if (activeVoices[keyId]) return; // prevent retrigger
+
+            const patch = PRESETS[currentPatchIndex];
+            const voice = new JVVoice(freq, patch);
+            activeVoices[keyId] = voice;
+            
+            const keyEl = document.getElementById(keyId);
+            if(keyEl) keyEl.classList.add('pressed');
+        }
+
+        function stopNote(keyId) {
+            if (activeVoices[keyId]) {
+                activeVoices[keyId].stop();
+                delete activeVoices[keyId];
+            }
+            const keyEl = document.getElementById(keyId);
+            if(keyEl) keyEl.classList.remove('pressed');
+        }
+
+        // --- UI LOGIC ---
+
+        // Tone Switches
+        [1, 2, 3, 4].forEach(i => {
+            document.getElementById(`tone${i}`).addEventListener('click', (e) => {
+                toneActive[i-1] = !toneActive[i-1];
+                e.currentTarget.classList.toggle('active');
+                updateLCD();
+            });
+        });
+
+        // Patch Navigation
+        function changePatch(delta) {
+            currentPatchIndex += delta;
+            if (currentPatchIndex < 0) currentPatchIndex = PRESETS.length - 1;
+            if (currentPatchIndex >= PRESETS.length) currentPatchIndex = 0;
+            updateLCD();
+        }
+
+        document.getElementById('btnInc').addEventListener('click', () => changePatch(1));
+        document.getElementById('btnDec').addEventListener('click', () => changePatch(-1));
+        
+        // Data Wheel Logic
+        const wheel = document.getElementById('dataWheel');
+        let startY = 0;
+        let isDragging = false;
+
+        wheel.addEventListener('mousedown', (e) => { isDragging = true; startY = e.clientY; });
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const diff = startY - e.clientY;
+            if (Math.abs(diff) > 20) {
+                changePatch(diff > 0 ? 1 : -1);
+                startY = e.clientY;
+            }
+        });
+        document.addEventListener('mouseup', () => { isDragging = false; });
+
+        // Touch Data Wheel
+        wheel.addEventListener('touchstart', (e) => { isDragging = true; startY = e.touches[0].clientY; });
+        wheel.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const diff = startY - e.touches[0].clientY;
+             if (Math.abs(diff) > 20) {
+                changePatch(diff > 0 ? 1 : -1);
+                startY = e.touches[0].clientY;
+            }
+        });
+
+        // Start Modal
+        document.getElementById('startModal').addEventListener('click', initAudio);
+
+        function updateLCD() {
+            const patch = PRESETS[currentPatchIndex];
+            const activeStr = toneActive.map((t, i) => t ? (i+1) : '_').join('');
+            
+            document.getElementById('lcd-line-1').innerText = 
+                `USER: ${String(currentPatchIndex + 1).padStart(3, '0')} [${patch.name}]`;
+            
+            document.getElementById('lcd-line-2').innerText = 
+                `P:1 T:${activeStr} ${patch.category}`;
+        }
+
+        // --- KEYBOARD GENERATION ---
+        const keysEl = document.getElementById('keyboard');
+        const keyMap = ['a','w','s','e','d','f','t','g','y','h','u','j','k'];
+        const notes = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B','C'];
+        const baseFreq = 261.63; // Middle C
+
+        let keysHTML = `<div class="keys">`;
+        
+        for (let i = 0; i < 13; i++) {
+            const isBlack = notes[i].includes('#');
+            const freq = baseFreq * Math.pow(2, i/12);
+            const keyId = `key-${i}`;
+            const keyChar = keyMap[i] || '';
+            
+            // For CSS logic, white keys are flex items, black keys absolute positioned
+            if (!isBlack) {
+                // Check if next is black to add spacer logic or just render
+                // For simplicity in this flex layout:
+                // We render white keys. If a black key exists between this and next, we append it inside or absolutely position it relative to this.
+                // Actually, standard HTML keyboard approach:
+                // Render white keys as flex. Place black keys absolutely based on percentages.
+                keysHTML += `<div class="key" id="${keyId}" onmousedown="playNote(${freq}, '${keyId}')" onmouseup="stopNote('${keyId}')" onmouseleave="stopNote('${keyId}')" ontouchstart="playNote(${freq}, '${keyId}'); event.preventDefault()" ontouchend="stopNote('${keyId}')"></div>`;
+            }
+        }
+        keysHTML += `</div>`;
+        keysEl.innerHTML = keysHTML;
+
+        // Add Black Keys Programmatically to overlay
+        const blackIndices = [1, 3, 6, 8, 10]; // C#, D#, F#, G#, A#
+        blackIndices.forEach(i => {
+            const freq = baseFreq * Math.pow(2, i/12);
+            const keyId = `key-${i}`;
+            const blackKey = document.createElement('div');
+            blackKey.className = 'key black';
+            blackKey.id = keyId;
+            
+            // Calculate position
+            // i=1 (C#) is between 0 (C) and 2 (D). Left should be approx 10%
+            let leftPerc = 0;
+            if (i===1) leftPerc = 10;
+            if (i===3) leftPerc = 24;
+            if (i===6) leftPerc = 53;
+            if (i===8) leftPerc = 68;
+            if (i===10) leftPerc = 82;
+
+            blackKey.style.left = leftPerc + "%";
+            
+            // Events
+            blackKey.onmousedown = (e) => { e.stopPropagation(); playNote(freq, keyId); };
+            blackKey.onmouseup = (e) => { e.stopPropagation(); stopNote(keyId); };
+            blackKey.onmouseleave = (e) => { stopNote(keyId); };
+            blackKey.ontouchstart = (e) => { e.stopPropagation(); e.preventDefault(); playNote(freq, keyId); };
+            blackKey.ontouchend = (e) => { e.stopPropagation(); stopNote(keyId); };
+
+            keysEl.querySelector('.keys').appendChild(blackKey);
+        });
+
+        // Computer Keyboard Support
+        window.addEventListener('keydown', (e) => {
+            const idx = keyMap.indexOf(e.key);
+            if (idx !== -1) {
+                const freq = baseFreq * Math.pow(2, idx/12);
+                playNote(freq, `key-${idx}`);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const idx = keyMap.indexOf(e.key);
+            if (idx !== -1) {
+                stopNote(`key-${idx}`);
+            }
+        });
+
+    </script>
+</body>
+</html>
+
